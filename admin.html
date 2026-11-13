@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Staff portal | ZENORA 26</title>
+<meta name="description" content="ZENORA 26, the intercollegiate zoology department festival at Loyola College, Chennai. Where every species has a place.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/zenora.css">
+</head>
+<body>
+<div id="site-header"></div>
+<main id="main">
+
+<section class="section wrap">
+  <h1 class="page-title">Staff portal</h1>
+  <div id="msg" class="hidden" role="alert"></div>
+
+  <form class="card form narrow" id="login">
+    <p class="page-sub" style="margin:0">For organisers, faculty, association members and volunteers.</p>
+    <div class="field"><label for="a-email">Email</label><input id="a-email" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="a-pass">Password</label><input id="a-pass" type="password" autocomplete="current-password" required></div>
+    <div><button class="btn btn-forest btn-lg" type="submit">Log in</button></div>
+  </form>
+
+  <div id="app" class="hidden">
+    <p style="margin-bottom:14px"><span id="who" style="font-weight:600"></span> <button class="link-quiet" id="a-out" style="color:var(--forest);text-decoration:underline">Log out</button></p>
+    <div class="chips" id="tabs" role="tablist"></div>
+    <div id="panel"></div>
+  </div>
+</section>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+
+(function () {
+  const $ = (id) => document.getElementById(id), msg = $("msg"), panel = $("panel");
+  const A = (a, d) => Z.api(a, d || {}, "staff");
+  const E = Z.esc;
+  let mods = [], current = "overview";
+
+  /* ---------- helpers ---------- */
+  const table = (cols, rows) => '<div class="table-wrap"><table><thead><tr>' + cols.map((c) => `<th>${c.h}</th>`).join("") + "</tr></thead><tbody>" +
+    (rows.length ? rows.map((r, i) => "<tr>" + cols.map((c) => `<td>${c.f ? c.f(r, i) : E(r[c.k])}</td>`).join("") + "</tr>").join("") : `<tr><td colspan="${cols.length}">Nothing here yet.</td></tr>`) + "</tbody></table></div>";
+  function csv(name, cols, rows) {
+    const q = (v) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+    const lines = [cols.map((c) => q(c.h)).join(",")].concat(rows.map((r) => cols.map((c) => q(c.csv ? c.csv(r) : r[c.k])).join(",")));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv" }));
+    a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  }
+  const formHtml = (spec, v) => spec.map((f) => {
+    const val = v[f.k] ?? "", id = "f_" + f.k; let ctl;
+    if (f.t === "select") ctl = `<select id="${id}">${f.o.map((o) => `<option ${String(val) === o ? "selected" : ""}>${E(o)}</option>`).join("")}</select>`;
+    else if (f.t === "area") ctl = `<textarea id="${id}" rows="3">${E(val)}</textarea>`;
+    else ctl = `<input id="${id}" type="${f.t || "text"}" value="${E(val)}">`;
+    return `<div class="field"><label for="${id}">${f.l}</label>${ctl}${f.s ? `<small>${f.s}</small>` : ""}</div>`;
+  }).join("");
+  const readForm = (spec) => Object.fromEntries(spec.map((f) => [f.k, $("f_" + f.k).value]));
+  const ok = (t) => Z.show(msg, "ok", t), bad = (e) => Z.show(msg, "err", e.message);
+  const TF = ["TRUE", "FALSE"];
+
+  /* ---------- tabs ---------- */
+  async function tOverview() {
+    const o = await A("a_overview");
+    const items = [["Participants", o.participants], ["Not yet verified", o.unverified], ["Events", o.events], ["Event registrations", o.registrations], ["Teams", o.teams],
+      ["Colleges to verify", o.colleges_pending], ["Secretary requests", o.secretaries_pending], ["Colleges finalized", o.colleges_finalized],
+      ["Emails waiting", o.mail_pending], ["Emails failed", o.mail_failed], ["Sent today", o.mail_sent_today + " of " + o.mail_cap]];
+    panel.innerHTML = '<div class="event-grid">' + items.map(([l, v]) => `<div class="card"><div class="display" style="font-size:2rem;font-weight:800;color:var(--forest)">${E(v)}</div><div>${l}</div></div>`).join("") + "</div>";
+  }
+
+  async function tColleges() {
+    let rows = await A("a_colleges"), onlyPending = false;
+    const SPEC = [{ k: "college_code", l: "College code", s: "Unique, e.g. LC001. Changing it updates every student and team of this college." }, { k: "name", l: "College name" }, { k: "website", l: "Website" }, { k: "email", l: "Official email" }, { k: "address", l: "Address", t: "area" },
+      { k: "status", l: "Status", t: "select", o: ["Autonomous", "University", "Non-autonomous"] }, { k: "verified", l: "Verified (shown in the registration list)", t: "select", o: TF }];
+    function draw() {
+      const list = rows.filter((r) => !onlyPending || !r.verified);
+      panel.innerHTML = `<p style="margin-bottom:12px"><button class="btn btn-forest btn-sm" id="add">Add college</button> <label class="check" style="display:inline-flex;margin-left:12px"><input type="checkbox" id="pend" ${onlyPending ? "checked" : ""}> Only unverified</label></p><div id="editor"></div>` +
+        table([{ h: "Code", k: "college_code" }, { h: "College", f: (r) => `<strong>${E(r.name)}</strong><br><small>${E(r.status)}${r.website ? ", " + E(r.website) : ""}</small>` }, { h: "Verified", f: (r) => (r.verified ? "Yes" : '<strong style="color:var(--danger)">No</strong>') },
+          { h: "Students", k: "users" }, { h: "Secretary", f: (r) => (r.has_secretary ? (r.finalized ? "Finalized" : "Yes") : "-") }, { h: "", f: (r, i) => `<button class="btn btn-outline btn-sm" data-e="${rows.indexOf(r)}">Edit</button>` }], list);
+      $("pend").onchange = (e) => { onlyPending = e.target.checked; draw(); };
+      $("add").onclick = () => edit({ status: "Autonomous", verified: "TRUE" }, "");
+      panel.querySelectorAll("[data-e]").forEach((b) => (b.onclick = () => { const r = rows[b.dataset.e]; edit({ ...r, verified: r.verified ? "TRUE" : "FALSE" }, r.college_code); }));
+    }
+    function edit(v, orig) {
+      $("editor").innerHTML = `<div class="card form" style="margin-bottom:20px"><h3>${orig ? "Edit college" : "Add college"}</h3>${formHtml(SPEC, v)}<div><button class="btn btn-forest" id="save">Save</button> <button class="btn btn-outline" id="cancel">Close</button></div></div>`;
+      $("cancel").onclick = () => ($("editor").innerHTML = "");
+      $("save").onclick = async () => { try { rows = await A("a_collegeSave", { orig_code: orig, ...readForm(SPEC) }); ok("College saved."); draw(); } catch (e) { bad(e); } };
+      $("editor").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    draw();
+  }
+
+  async function tSecretaries() {
+    let rows = await A("a_secretaries");
+    const act = (r, i) => {
+      let b = "";
+      if (r.status !== "approved") b += `<button class="btn btn-forest btn-sm" data-d="approved" data-i="${i}">Approve</button> `;
+      if (r.status === "pending") b += `<button class="btn btn-danger btn-sm" data-d="rejected" data-i="${i}">Reject</button>`;
+      if (r.status === "approved") b += `<button class="btn btn-outline btn-sm" data-d="pending" data-i="${i}">Revoke</button> ` + (r.finalized ? `<button class="btn btn-outline btn-sm" data-f="0" data-i="${i}">Reopen college</button>` : `<button class="btn btn-outline btn-sm" data-f="1" data-i="${i}">Finalize for them</button>`);
+      return b;
+    };
+    function draw() {
+      panel.innerHTML = '<p class="page-sub">Requests from participants who ticked the Cultural Secretary box. Approving lets them see their college list and press Finalize.</p>' +
+        table([{ h: "Name", f: (r) => `<strong>${E(r.name)}</strong><br><small>${E(r.email)} ${E(r.phone)}</small>` }, { h: "College", k: "college" }, { h: "Status", f: (r) => E(r.status) + (r.finalized ? " (finalized)" : "") }, { h: "", f: act }], rows);
+      panel.querySelectorAll("[data-d]").forEach((b) => (b.onclick = async () => { try { rows = await A("a_secretaryDecide", { email: rows[b.dataset.i].email, status: b.dataset.d }); ok("Updated."); draw(); } catch (e) { bad(e); } }));
+      panel.querySelectorAll("[data-f]").forEach((b) => (b.onclick = async () => { if (!confirm("Are you sure?")) return; try { rows = await A("a_collegeFinalize", { college_code: rows[b.dataset.i].college_code, finalized: b.dataset.f === "1" }); ok("Updated."); draw(); } catch (e) { bad(e); } }));
+    }
+    draw();
+  }
+
+  async function tEvents() {
+    let rows = await A("a_events");
+    const SPEC = [{ k: "name", l: "Event name" }, { k: "creative_title", l: "Creative title (e.g. BioHunt)" }, { k: "mode", l: "Mode", t: "select", o: ["Onstage", "Offstage", "Online"] }, { k: "type", l: "Type", t: "select", o: ["Individual", "Team"] },
+      { k: "description", l: "Description", t: "area" }, { k: "rules", l: "Rules", t: "area" }, { k: "min_team", l: "Minimum team size", t: "number", s: "Team events only, leader included" }, { k: "max_team", l: "Maximum team size", t: "number" },
+      { k: "max_per_college", l: "Maximum entries per college", t: "number", s: "Teams for team events, individuals for individual events. Blank = no limit" },
+      { k: "reg_open", l: "Registration opens", t: "date" }, { k: "reg_close", l: "Registration closes", t: "date" }, { k: "date", l: "Event date", t: "date" }, { k: "time", l: "Start time", t: "time" }, { k: "duration_min", l: "Duration (minutes)", t: "number" },
+      { k: "venue", l: "Venue" }, { k: "whatsapp_link", l: "WhatsApp group link", t: "url", s: "Shown only after a participant registers" },
+      { k: "upload_required", l: "Online upload required", t: "select", o: TF }, { k: "upload_types", l: "Allowed file types", s: "e.g. pdf, jpg, mp4" }, { k: "upload_max_mb", l: "Max file size (MB)", t: "number" }, { k: "drive_link_allowed", l: "Drive link allowed instead of file", t: "select", o: TF },
+      { k: "counts_for_championship", l: "Counts for overall championship", t: "select", o: TF }, { k: "published", l: "Published (visible on the site)", t: "select", o: TF }];
+    function draw() {
+      panel.innerHTML = `<p style="margin-bottom:12px"><button class="btn btn-forest btn-sm" id="add">Add event</button></p><div id="editor"></div>` +
+        table([{ h: "ID", k: "event_id" }, { h: "Event", f: (r) => `<strong>${E(r.creative_title || r.name)}</strong><br><small>${E(r.name)}</small>` }, { h: "Mode / type", f: (r) => E(r.mode) + " / " + E(r.type) }, { h: "When", f: (r) => E([r.date, r.time].filter(Boolean).join(" ")) },
+          { h: "Registered", k: "registered" }, { h: "Live", f: (r) => (String(r.published).toUpperCase() === "FALSE" ? "No" : "Yes") }, { h: "", f: (r, i) => `<button class="btn btn-outline btn-sm" data-e="${i}">Edit</button>` }], rows);
+      $("add").onclick = () => edit({ mode: "Onstage", type: "Individual", upload_required: "FALSE", drive_link_allowed: "FALSE", counts_for_championship: "TRUE", published: "FALSE", duration_min: "60" }, "");
+      panel.querySelectorAll("[data-e]").forEach((b) => (b.onclick = () => { const r = rows[b.dataset.e]; edit(r, r.event_id); }));
+    }
+    function edit(v, id) {
+      $("editor").innerHTML = `<div class="card form" style="margin-bottom:20px"><h3>${id ? "Edit " + E(id) : "Add event"}</h3>${formHtml(SPEC, v)}<div><button class="btn btn-forest" id="save">Save</button> <button class="btn btn-outline" id="cancel">Close</button></div></div>`;
+      $("cancel").onclick = () => ($("editor").innerHTML = "");
+      $("save").onclick = async () => { try { rows = await A("a_eventSave", { event_id: id, ...readForm(SPEC) }); ok("Event saved. The public list refreshes within a minute."); draw(); } catch (e) { bad(e); } };
+      $("editor").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    draw();
+  }
+
+  async function tParticipants() {
+    const rows = await A("a_participants");
+    const cols = [{ h: "ID", k: "user_id" }, { h: "Name", k: "name" }, { h: "College", k: "college" }, { h: "Level", f: (r) => E(r.level) + (r.year ? " " + E(r.year) : ""), csv: (r) => r.level + " " + r.year }, { h: "Phone", k: "phone" }, { h: "Email", k: "email" },
+      { h: "Gender", k: "gender" }, { h: "Food", k: "food" }, { h: "Stay", k: "accommodation" }, { h: "Events", k: "events" }, { h: "Verified", f: (r) => (r.verified ? "Yes" : "No"), csv: (r) => (r.verified ? "Yes" : "No") },
+      { h: "ID card", f: (r) => (r.id_image ? `<a href="${E(r.id_image)}" target="_blank" rel="noopener">View</a>` : ""), csv: (r) => r.id_image }];
+    panel.innerHTML = `<p style="margin-bottom:12px"><input id="q" placeholder="Search name, college, ID" style="max-width:320px;display:inline-block"> <button class="btn btn-outline btn-sm" id="dl">Download CSV</button> <span id="count" style="margin-left:8px"></span></p><div id="list"></div>`;
+    let shown = rows;
+    const draw = () => { $("list").innerHTML = table(cols, shown); $("count").textContent = shown.length + " of " + rows.length; };
+    $("q").oninput = (e) => { const s = e.target.value.toLowerCase(); shown = rows.filter((r) => [r.name, r.college, r.user_id, r.email].join(" ").toLowerCase().includes(s)); draw(); };
+    $("dl").onclick = () => csv("participants.csv", cols, shown);
+    draw();
+  }
+
+  async function tRosters() {
+    const evs = await A("a_events");
+    panel.innerHTML = `<div class="field narrow"><label for="ev">Event</label><select id="ev">${evs.map((e) => `<option value="${E(e.event_id)}">${E((e.creative_title || e.name) + " (" + e.type + ")")}</option>`).join("")}</select></div><p style="margin-bottom:12px"><button class="btn btn-forest btn-sm" id="load">Show list</button> <button class="btn btn-outline btn-sm hidden" id="dl">Download CSV</button></p><div id="list"></div>`;
+    let last;
+    $("load").onclick = async () => {
+      try {
+        last = await A("a_roster", { event_id: $("ev").value });
+        const team = String(last.event.type).toLowerCase() === "team";
+        const cols = [{ h: "College", k: "college" }, ...(team ? [{ h: "Team", k: "team" }, { h: "Role", k: "role" }, { h: "Team size", f: (r) => E(r.team_size) + (r.incomplete ? ' <strong style="color:var(--danger)">incomplete</strong>' : ""), csv: (r) => r.team_size + (r.incomplete ? " incomplete" : "") }] : []),
+          { h: "ID", k: "user_id" }, { h: "Name", k: "name" }, { h: "Phone", k: "phone" }, { h: "Level", f: (r) => E(r.level) + " " + E(r.year), csv: (r) => r.level + " " + r.year }];
+        last.cols = cols;
+        $("list").innerHTML = table(cols, last.rows); $("dl").classList.remove("hidden");
+      } catch (e) { bad(e); }
+    };
+    $("dl").onclick = () => csv("event-list-" + last.event.event_id + ".csv", last.cols, last.rows);
+  }
+
+  async function tMail() {
+    let rows = await A("a_mail");
+    function draw() {
+      panel.innerHTML = `<p style="margin-bottom:12px"><button class="btn btn-forest btn-sm" id="flush">Send waiting emails now</button> <button class="btn btn-outline btn-sm" id="retry">Retry failed</button></p>` +
+        table([{ h: "Created", f: (r) => E(String(r.created_at).replace("T", " ")) }, { h: "To", k: "to" }, { h: "Type", k: "template" }, { h: "Status", f: (r) => E(r.status) + (r.error ? "<br><small>" + E(r.error) + "</small>" : "") }, { h: "Tries", k: "attempts" }], rows);
+      $("flush").onclick = async () => { try { const r = await A("a_mailFlush"); rows = r.rows; ok(r.sent + " email(s) sent."); draw(); } catch (e) { bad(e); } };
+      $("retry").onclick = async () => { try { rows = await A("a_mailRetry"); ok("Failed emails are queued again."); draw(); } catch (e) { bad(e); } };
+    }
+    draw();
+  }
+
+  async function tSettings() {
+    let rows = await A("a_settings");
+    panel.innerHTML = '<p class="page-sub">Dates are written 2026-12-05. Changes appear on the site within a minute.</p>' +
+      table([{ h: "Setting", f: (r) => `<strong>${E(r.key)}</strong><br><small>${E(r.note)}</small>` }, { h: "Value", f: (r, i) => `<input data-k="${E(r.key)}" value="${E(r.value)}">` }, { h: "", f: (r) => `<button class="btn btn-outline btn-sm" data-s="${E(r.key)}">Save</button>` }], rows);
+    panel.querySelectorAll("[data-s]").forEach((b) => (b.onclick = async () => {
+      try { await A("a_settingSave", { key: b.dataset.s, value: panel.querySelector(`input[data-k="${b.dataset.s}"]`).value }); ok("Saved " + b.dataset.s + "."); } catch (e) { bad(e); }
+    }));
+  }
+
+  async function tStaff() {
+    let rows = await A("a_staff");
+    const SPEC = [{ k: "name", l: "Name" }, { k: "email", l: "Email (login)", t: "email" }, { k: "role", l: "Role", t: "select", o: ["admin", "association", "faculty", "volunteer", "desk", "super_admin"] },
+      { k: "active", l: "Active", t: "select", o: TF }, { k: "password", l: "Password", t: "text", s: "Required for a new person (a temporary one). Leave blank to keep the current password." }];
+    function draw() {
+      panel.innerHTML = `<p style="margin-bottom:12px"><button class="btn btn-forest btn-sm" id="add">Add staff</button></p><div id="editor"></div>` +
+        table([{ h: "Name", k: "name" }, { h: "Email", k: "email" }, { h: "Role", k: "role" }, { h: "Active", f: (r) => (r.active ? "Yes" : "No") }, { h: "", f: (r, i) => `<button class="btn btn-outline btn-sm" data-e="${i}">Edit</button>` }], rows);
+      $("add").onclick = () => edit({ role: "volunteer", active: "TRUE" });
+      panel.querySelectorAll("[data-e]").forEach((b) => (b.onclick = () => { const r = rows[b.dataset.e]; edit({ ...r, active: r.active ? "TRUE" : "FALSE" }); }));
+    }
+    function edit(v) {
+      $("editor").innerHTML = `<div class="card form" style="margin-bottom:20px">${formHtml(SPEC, v)}<div><button class="btn btn-forest" id="save">Save</button> <button class="btn btn-outline" id="cancel">Close</button></div></div>`;
+      $("cancel").onclick = () => ($("editor").innerHTML = "");
+      $("save").onclick = async () => { try { rows = await A("a_staffSave", readForm(SPEC)); ok("Saved."); draw(); } catch (e) { bad(e); } };
+    }
+    draw();
+  }
+
+  async function tPerms() {
+    const p = await A("a_perms");
+    const roles = p.roles.filter((r) => r !== "super_admin");
+    panel.innerHTML = `<p class="page-sub">Choose what each role can do. View shows the tab. Edit changes data. Approve decides requests. Super admins always have everything.</p>
+      <div class="field narrow"><label for="role">Role</label><select id="role">${roles.map((r) => `<option>${E(r)}</option>`).join("")}</select></div><div id="matrix"></div>`;
+    const draw = () => {
+      const role = $("role").value;
+      const get = (m) => p.rows.find((r) => r.role === role && r.module === m) || {};
+      $("matrix").innerHTML = table([{ h: "Module", k: "m" }, ...["view", "edit", "approve"].map((l) => ({ h: l[0].toUpperCase() + l.slice(1), f: (r) => `<input type="checkbox" data-m="${r.m}" data-l="${l}" ${get(r.m)["can_" + l] ? "checked" : ""}>` }))], p.modules.map((m) => ({ m }))) +
+        '<p style="margin-top:12px"><button class="btn btn-forest" id="save">Save permissions</button></p>';
+      $("save").onclick = async () => {
+        const rows = p.modules.map((m) => ({ module: m, can_view: !!panel.querySelector(`[data-m="${m}"][data-l="view"]`).checked, can_edit: !!panel.querySelector(`[data-m="${m}"][data-l="edit"]`).checked, can_approve: !!panel.querySelector(`[data-m="${m}"][data-l="approve"]`).checked }));
+        try { const r = await A("a_permSave", { role, rows }); p.rows = r.rows; ok("Permissions saved for " + role + "."); } catch (e) { bad(e); }
+      };
+    };
+    $("role").onchange = draw; draw();
+  }
+
+  const TABS = { overview: ["Overview", tOverview], colleges: ["Colleges", tColleges], secretaries: ["Cultural Secretaries", tSecretaries], events: ["Events", tEvents], participants: ["Participants", tParticipants],
+    rosters: ["Event lists", tRosters], mail: ["Email", tMail], settings: ["Settings", tSettings], staff: ["Staff", tStaff], permissions: ["Permissions", tPerms] };
+
+  function drawTabs() {
+    $("tabs").innerHTML = mods.filter((m) => TABS[m]).map((m) => `<button class="chip" role="tab" aria-pressed="${m === current}" data-t="${m}">${TABS[m][0]}</button>`).join("");
+    $("tabs").querySelectorAll("button").forEach((b) => (b.onclick = () => open(b.dataset.t)));
+  }
+  async function open(t) {
+    current = t; drawTabs(); msg.className = "hidden"; panel.innerHTML = "<p>Loading...</p>";
+    try { await TABS[t][1](); } catch (e) { panel.innerHTML = ""; if (e.code === "AUTH") return showLogin(); bad(e); }
+  }
+  function showApp(info) {
+    mods = info.modules; $("who").textContent = info.staff.name + " (" + info.staff.role + ")";
+    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    open(mods.includes(current) ? current : mods[0]);
+  }
+  function showLogin() { $("app").classList.add("hidden"); $("login").classList.remove("hidden"); }
+
+  $("login").addEventListener("submit", async (e) => {
+    e.preventDefault(); msg.className = "hidden";
+    try { const r = await Z.api("staffLogin", { email: $("a-email").value, password: $("a-pass").value }); Z.setStaffToken(r.token); $("a-pass").value = ""; showApp(r); }
+    catch (err) { bad(err); }
+  });
+  $("a-out").onclick = () => { Z.clearStaffToken(); location.reload(); };
+
+  (async () => {
+    if (!Z.staffToken()) return;
+    try { showApp(await A("a_me")); } catch (e) { showLogin(); }
+  })();
+})();
+
+</script>
+</body>
+</html>

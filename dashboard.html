@@ -31,7 +31,7 @@
       <div class="card">
         <h2 class="h2" style="font-size:1.6rem;margin-bottom:12px">My events</h2>
         <div class="table-wrap"><table id="regs"><thead><tr><th>Event</th><th>When</th><th>Where</th><th></th></tr></thead><tbody><tr><td colspan="4">Loading...</td></tr></tbody></table></div>
-        <p style="margin-top:14px"><a class="btn btn-forest btn-sm" href="events.html">Browse events</a></p>
+        <p style="margin-top:14px"><a class="btn btn-forest btn-sm" href="events.html">Browse events</a> <a class="btn btn-outline btn-sm hidden" id="sec-link" href="secretary.html">Cultural Secretary page</a></p>
       </div>
       <div class="card">
         <h2 class="h2" style="font-size:1.6rem;margin-bottom:12px">My details</h2>
@@ -73,6 +73,7 @@
     if (me.secretary_status === "approved") notes += '<div class="alert alert-ok">You are an approved Cultural Secretary for ' + Z.esc(me.college_name) + '.</div>';
     if (!me.college_verified) notes += '<div class="alert alert-warn">Your college is waiting for verification by the organisers. You can continue to register for events.</div>';
     $("notes").innerHTML = notes;
+    $("sec-link").classList.toggle("hidden", me.secretary_status !== "approved");
     $("p-name").value = me.name; $("p-phone").value = me.phone; $("p-emergency").value = me.emergency_contact; $("p-food").value = me.food;
   }
   async function regs() {
@@ -82,12 +83,21 @@
     tb.innerHTML = rows.map((r) => {
       const cancelled = r.status !== "registered";
       const when = [r.date ? Z.fmtDate(r.date, { day: "numeric", month: "short" }) : "", r.time].filter(Boolean).join(", ");
-      return `<tr><td class="${cancelled ? "status-cancelled" : ""}"><strong>${Z.esc(r.creative_title || r.name)}</strong><br><small>${Z.esc(r.mode)}${cancelled ? " (cancelled)" : ""}</small></td>
+      const t = r.team;
+      let teamHtml = "";
+      if (t) {
+        teamHtml = `<br><small>Team of ${t.size}${t.max_team ? " (max " + t.max_team + ")" : ""}: ${t.members.map((m) => Z.esc(m.name)).join(", ")}</small>`;
+        if (t.is_leader) teamHtml += `<br><small>Team code: <strong>${Z.esc(t.join_code)}</strong></small>`;
+        else teamHtml += `<br><small>Leader: ${Z.esc(t.leader_name)}</small>`;
+        if (t.incomplete) teamHtml += `<br><small style="color:var(--danger)">Needs at least ${t.min_team} members</small>`;
+      }
+      const cancelLabel = t ? (t.is_leader ? "Cancel team" : "Leave team") : "Cancel";
+      return `<tr><td class="${cancelled ? "status-cancelled" : ""}"><strong>${Z.esc(r.creative_title || r.name)}</strong><br><small>${Z.esc(r.mode)}${cancelled ? " (cancelled)" : ""}</small>${cancelled ? "" : teamHtml}</td>
         <td>${Z.esc(when)}</td><td>${Z.esc(r.venue)}</td>
-        <td>${cancelled ? "" : (r.whatsapp_link ? `<a class="btn btn-outline btn-sm" href="${Z.esc(r.whatsapp_link)}" target="_blank" rel="noopener">WhatsApp</a> ` : "") + `<button class="btn btn-danger btn-sm" data-c="${Z.esc(r.reg_id)}">Cancel</button>`}</td></tr>`;
+        <td>${cancelled ? "" : (r.whatsapp_link ? `<a class="btn btn-outline btn-sm" href="${Z.esc(r.whatsapp_link)}" target="_blank" rel="noopener">WhatsApp</a> ` : "") + `<button class="btn btn-danger btn-sm" data-c="${Z.esc(r.reg_id)}" data-leader="${t && t.is_leader ? 1 : 0}">${cancelLabel}</button>`}</td></tr>`;
     }).join("");
     tb.querySelectorAll("[data-c]").forEach((b) => b.onclick = async () => {
-      if (!confirm("Cancel this registration?")) return;
+      if (!confirm(b.dataset.leader === "1" ? "Cancel the whole team? Every member will be removed and emailed." : "Cancel this registration?")) return;
       try { await Z.api("cancelRegistration", { reg_id: b.dataset.c }, true); Z.show(msg, "ok", "Registration cancelled."); await regs(); }
       catch (e) { Z.show(msg, "err", e.message); }
     });

@@ -16,8 +16,12 @@
 
 <section class="section wrap">
   <h1 class="page-title">Events</h1>
-  <p class="page-sub">Online, onstage and offstage competitions for Zoology departments. Log in to register. Individual events can be registered here; team events are coming in the next update.</p>
+  <p class="page-sub">Online, onstage and offstage competitions for Zoology departments. Log in to register. For team events, the team leader creates a team and shares the team code; teammates from the same college join with it.</p>
   <div id="msg" class="hidden" role="status"></div>
+  <form class="card hidden" id="joinbox" style="margin-bottom:24px;display:flex;gap:12px;align-items:end;flex-wrap:wrap">
+    <div class="field" style="margin:0;flex:1;min-width:220px"><label for="code">Have a team code from your team leader?</label><input id="code" maxlength="8" autocomplete="off" placeholder="e.g. K7M2QX" style="text-transform:uppercase"></div>
+    <button class="btn btn-forest" type="submit">Join team</button>
+  </form>
   <div class="chips" id="chips" role="group" aria-label="Filter by mode"></div>
   <div class="event-grid" id="grid"><p>Loading events...</p></div>
 </section>
@@ -50,14 +54,15 @@
     const when = [e.date ? Z.fmtDate(e.date) : "", e.time].filter(Boolean).join(", ");
     let slots = "";
     if (e.max_per_college) {
+      const unit = team ? "teams" : "slots";
       slots = loggedIn && e.college_taken !== undefined
-        ? `Your college: ${e.college_taken} of ${e.max_per_college} slots used`
-        : `Up to ${e.max_per_college} per college`;
+        ? `Your college: ${e.college_taken} of ${e.max_per_college} ${unit} used`
+        : `Up to ${e.max_per_college} ${team ? "teams" : "entries"} per college`;
     }
     let action;
     if (!loggedIn) action = `<a class="btn btn-forest btn-sm" href="login.html?next=events.html">Log in to register</a>`;
     else if (e.registered) action = `<span class="tag">Registered</span>`;
-    else if (team) action = `<button class="btn btn-outline btn-sm" disabled>Team registration opens soon</button>`;
+    else if (team) action = `<button class="btn btn-forest btn-sm" data-team="${Z.esc(e.event_id)}">Create a team</button>`;
     else action = `<button class="btn btn-forest btn-sm" data-reg="${Z.esc(e.event_id)}">Register</button>`;
     return `<article class="event">
       <div class="tags"><span class="tag ${e.mode === "Online" ? "tag-online" : ""}">${Z.esc(e.mode)}</span>
@@ -72,19 +77,43 @@
     const list = events.filter((e) => filter === "All" || e.mode === filter);
     grid.innerHTML = list.length ? list.map(card).join("") : "<p>No events to show yet. Please check back soon.</p>";
     grid.querySelectorAll("[data-reg]").forEach((b) => b.onclick = () => register(b));
+    grid.querySelectorAll("[data-team]").forEach((b) => b.onclick = () => createTeam(b));
+    document.getElementById("joinbox").classList.toggle("hidden", !loggedIn || !events.some((e) => String(e.type).toLowerCase() === "team"));
   }
+  function extras(r) {
+    if (r.whatsapp_link) {
+      const a = document.createElement("a");
+      a.href = r.whatsapp_link; a.target = "_blank"; a.rel = "noopener"; a.className = "btn btn-forest btn-sm";
+      a.style.marginLeft = "12px"; a.textContent = "Join the WhatsApp group";
+      msg.appendChild(a);
+    }
+  }
+  async function createTeam(btn) {
+    btn.disabled = true; btn.textContent = "Creating...";
+    try {
+      const r = await Z.api("teamCreate", { event_id: btn.dataset.team }, true);
+      Z.show(msg, r.warnings && r.warnings.length ? "warn" : "ok", "Team created. Your team code is " + r.join_code + ". Share it only with teammates from your college (they join from this page). Team size: " + r.min_team + " to " + r.max_team + ". " + (r.warnings || []).join(" "));
+      extras(r); await load(); render();
+    } catch (e) {
+      if (e.code === "AUTH") { location.href = "login.html?next=events.html"; return; }
+      Z.show(msg, "err", e.message); btn.disabled = false; btn.textContent = "Create a team";
+    }
+  }
+  document.getElementById("joinbox").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    try {
+      const r = await Z.api("teamJoin", { code: document.getElementById("code").value }, true);
+      Z.show(msg, r.warnings && r.warnings.length ? "warn" : "ok", "You joined the team for " + r.event_name + ". " + (r.warnings || []).join(" "));
+      extras(r); document.getElementById("code").value = ""; await load(); render();
+    } catch (e) { Z.show(msg, "err", e.message); }
+  });
   async function register(btn) {
     btn.disabled = true; btn.textContent = "Registering...";
     try {
       const r = await Z.api("registerEvent", { event_id: btn.dataset.reg }, true);
       let text = "You are registered. A confirmation email is on its way.";
       Z.show(msg, r.warnings && r.warnings.length ? "warn" : "ok", text + (r.warnings && r.warnings.length ? " " + r.warnings.join(" ") : ""));
-      if (r.whatsapp_link) {
-        const a = document.createElement("a");
-        a.href = r.whatsapp_link; a.target = "_blank"; a.rel = "noopener"; a.className = "btn btn-forest btn-sm";
-        a.style.marginLeft = "12px"; a.textContent = "Join the WhatsApp group";
-        msg.appendChild(a);
-      }
+      extras(r);
       await load(); render();
     } catch (e) {
       if (e.code === "AUTH") { location.href = "login.html?next=events.html"; return; }
