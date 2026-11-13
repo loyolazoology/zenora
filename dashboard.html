@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My dashboard | ZENORA 26</title>
+<meta name="description" content="ZENORA 26, the intercollegiate zoology department festival at Loyola College, Chennai. Where every species has a place.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/zenora.css">
+</head>
+<body>
+<div id="site-header"></div>
+<main id="main">
+
+<section class="section wrap">
+  <h1 class="page-title">My dashboard</h1>
+  <div id="msg" class="hidden" role="alert"></div>
+  <div id="notes"></div>
+  <div class="dash-grid">
+    <aside class="card pass" aria-label="Your pass">
+      <p>Participant ID</p>
+      <p class="id" id="uid">...</p>
+      <div id="qr" aria-label="Your QR pass"></div>
+      <p id="who" style="font-weight:600"></p>
+      <p id="college" style="color:var(--muted)"></p>
+      <p style="margin-top:10px;font-size:.9rem;color:var(--muted)">Show this QR to the volunteer for entry and at each event. Do not share a screenshot.</p>
+    </aside>
+    <div style="display:grid;gap:24px">
+      <div class="card">
+        <h2 class="h2" style="font-size:1.6rem;margin-bottom:12px">My events</h2>
+        <div class="table-wrap"><table id="regs"><thead><tr><th>Event</th><th>When</th><th>Where</th><th></th></tr></thead><tbody><tr><td colspan="4">Loading...</td></tr></tbody></table></div>
+        <p style="margin-top:14px"><a class="btn btn-forest btn-sm" href="events.html">Browse events</a></p>
+      </div>
+      <div class="card">
+        <h2 class="h2" style="font-size:1.6rem;margin-bottom:12px">My details</h2>
+        <form class="form" id="pform">
+          <div class="row">
+            <div class="field"><label for="p-name">Name</label><input id="p-name"></div>
+            <div class="field"><label for="p-phone">Mobile number</label><input id="p-phone" inputmode="numeric"></div>
+          </div>
+          <div class="row">
+            <div class="field"><label for="p-emergency">Emergency contact</label><input id="p-emergency" inputmode="numeric"></div>
+            <div class="field"><label for="p-food">Food preference</label><select id="p-food"><option value="">Choose</option><option>Vegetarian</option><option>Non-vegetarian</option></select></div>
+          </div>
+          <div><button class="btn btn-outline btn-sm" type="submit">Save details</button></div>
+        </form>
+        <p style="margin-top:10px;color:var(--muted);font-size:.9rem">To change your email, college or ID card, please contact the organisers.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/layout.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script><script>
+
+(async function () {
+  if (!Z.requireLogin()) return;
+  const $ = (id) => document.getElementById(id), msg = $("msg");
+  let me;
+  function paint() {
+    $("uid").textContent = me.user_id; $("who").textContent = me.name;
+    $("college").textContent = [me.college_name, me.level + (me.year ? " year " + me.year : "")].filter(Boolean).join(", ");
+    $("qr").innerHTML = "";
+    new QRCode($("qr"), { text: me.qr, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+    let notes = "";
+    if (me.secretary_status === "pending") notes += '<div class="alert alert-warn">Your Cultural Secretary request is waiting for approval from the organisers.</div>';
+    if (me.secretary_status === "approved") notes += '<div class="alert alert-ok">You are an approved Cultural Secretary for ' + Z.esc(me.college_name) + '.</div>';
+    if (!me.college_verified) notes += '<div class="alert alert-warn">Your college is waiting for verification by the organisers. You can continue to register for events.</div>';
+    $("notes").innerHTML = notes;
+    $("p-name").value = me.name; $("p-phone").value = me.phone; $("p-emergency").value = me.emergency_contact; $("p-food").value = me.food;
+  }
+  async function regs() {
+    const rows = await Z.api("myRegistrations", {}, true);
+    const tb = $("regs").querySelector("tbody");
+    if (!rows.length) { tb.innerHTML = '<tr><td colspan="4">You have not registered for any event yet.</td></tr>'; return; }
+    tb.innerHTML = rows.map((r) => {
+      const cancelled = r.status !== "registered";
+      const when = [r.date ? Z.fmtDate(r.date, { day: "numeric", month: "short" }) : "", r.time].filter(Boolean).join(", ");
+      return `<tr><td class="${cancelled ? "status-cancelled" : ""}"><strong>${Z.esc(r.creative_title || r.name)}</strong><br><small>${Z.esc(r.mode)}${cancelled ? " (cancelled)" : ""}</small></td>
+        <td>${Z.esc(when)}</td><td>${Z.esc(r.venue)}</td>
+        <td>${cancelled ? "" : (r.whatsapp_link ? `<a class="btn btn-outline btn-sm" href="${Z.esc(r.whatsapp_link)}" target="_blank" rel="noopener">WhatsApp</a> ` : "") + `<button class="btn btn-danger btn-sm" data-c="${Z.esc(r.reg_id)}">Cancel</button>`}</td></tr>`;
+    }).join("");
+    tb.querySelectorAll("[data-c]").forEach((b) => b.onclick = async () => {
+      if (!confirm("Cancel this registration?")) return;
+      try { await Z.api("cancelRegistration", { reg_id: b.dataset.c }, true); Z.show(msg, "ok", "Registration cancelled."); await regs(); }
+      catch (e) { Z.show(msg, "err", e.message); }
+    });
+  }
+  try { me = await Z.api("me", {}, true); paint(); await regs(); }
+  catch (e) { if (e.code === "AUTH") return location.replace("login.html?next=dashboard.html"); Z.show(msg, "err", e.message); }
+
+  $("pform").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    try {
+      me = await Z.api("updateProfile", { name: $("p-name").value, phone: $("p-phone").value, emergency_contact: $("p-emergency").value, food: $("p-food").value }, true);
+      paint(); Z.show(msg, "ok", "Details saved.");
+    } catch (e) { Z.show(msg, "err", e.message); }
+  });
+})();
+
+</script>
+</body>
+</html>

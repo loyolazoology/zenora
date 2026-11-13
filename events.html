@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Events | ZENORA 26</title>
+<meta name="description" content="ZENORA 26, the intercollegiate zoology department festival at Loyola College, Chennai. Where every species has a place.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/zenora.css">
+</head>
+<body>
+<div id="site-header"></div>
+<main id="main">
+
+<section class="section wrap">
+  <h1 class="page-title">Events</h1>
+  <p class="page-sub">Online, onstage and offstage competitions for Zoology departments. Log in to register. Individual events can be registered here; team events are coming in the next update.</p>
+  <div id="msg" class="hidden" role="status"></div>
+  <div class="chips" id="chips" role="group" aria-label="Filter by mode"></div>
+  <div class="event-grid" id="grid"><p>Loading events...</p></div>
+</section>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+
+(async function () {
+  const grid = document.getElementById("grid"), msg = document.getElementById("msg"), chips = document.getElementById("chips");
+  let events = [], filter = "All";
+  const loggedIn = !!Z.token();
+
+  async function load() {
+    try { events = await Z.api("events", {}, true); }
+    catch (e) { events = await Z.api("events", {}, false); }
+  }
+  function chipsRender() {
+    const modes = ["All", ...new Set(events.map((e) => e.mode).filter(Boolean))];
+    chips.innerHTML = modes.map((m) => `<button class="chip" aria-pressed="${m === filter}" data-m="${Z.esc(m)}">${Z.esc(m)}</button>`).join("");
+    chips.querySelectorAll("button").forEach((b) => b.onclick = () => { filter = b.dataset.m; chipsRender(); render(); });
+  }
+  function card(e) {
+    const team = String(e.type).toLowerCase() === "team";
+    const title = e.creative_title || e.name;
+    const alt = e.creative_title && e.name !== e.creative_title ? e.name : "";
+    const when = [e.date ? Z.fmtDate(e.date) : "", e.time].filter(Boolean).join(", ");
+    let slots = "";
+    if (e.max_per_college) {
+      slots = loggedIn && e.college_taken !== undefined
+        ? `Your college: ${e.college_taken} of ${e.max_per_college} slots used`
+        : `Up to ${e.max_per_college} per college`;
+    }
+    let action;
+    if (!loggedIn) action = `<a class="btn btn-forest btn-sm" href="login.html?next=events.html">Log in to register</a>`;
+    else if (e.registered) action = `<span class="tag">Registered</span>`;
+    else if (team) action = `<button class="btn btn-outline btn-sm" disabled>Team registration opens soon</button>`;
+    else action = `<button class="btn btn-forest btn-sm" data-reg="${Z.esc(e.event_id)}">Register</button>`;
+    return `<article class="event">
+      <div class="tags"><span class="tag ${e.mode === "Online" ? "tag-online" : ""}">${Z.esc(e.mode)}</span>
+        <span class="tag">${team ? "Team of " + Z.esc(e.min_team || "?") + " to " + Z.esc(e.max_team || "?") : "Individual"}</span></div>
+      <h3>${Z.esc(title)}</h3>${alt ? `<p class="alt">${Z.esc(alt)}</p>` : ""}
+      <div class="meta">${when ? `<span>${Z.esc(when)}</span>` : ""}${e.venue ? `<span>${Z.esc(e.venue)}</span>` : ""}${slots ? `<span>${Z.esc(slots)}</span>` : ""}</div>
+      ${e.description ? `<p>${Z.esc(e.description)}</p>` : ""}
+      ${e.rules ? `<details><summary>Rules</summary><p>${Z.esc(e.rules)}</p></details>` : ""}
+      <div class="actions">${action}</div></article>`;
+  }
+  function render() {
+    const list = events.filter((e) => filter === "All" || e.mode === filter);
+    grid.innerHTML = list.length ? list.map(card).join("") : "<p>No events to show yet. Please check back soon.</p>";
+    grid.querySelectorAll("[data-reg]").forEach((b) => b.onclick = () => register(b));
+  }
+  async function register(btn) {
+    btn.disabled = true; btn.textContent = "Registering...";
+    try {
+      const r = await Z.api("registerEvent", { event_id: btn.dataset.reg }, true);
+      let text = "You are registered. A confirmation email is on its way.";
+      Z.show(msg, r.warnings && r.warnings.length ? "warn" : "ok", text + (r.warnings && r.warnings.length ? " " + r.warnings.join(" ") : ""));
+      if (r.whatsapp_link) {
+        const a = document.createElement("a");
+        a.href = r.whatsapp_link; a.target = "_blank"; a.rel = "noopener"; a.className = "btn btn-forest btn-sm";
+        a.style.marginLeft = "12px"; a.textContent = "Join the WhatsApp group";
+        msg.appendChild(a);
+      }
+      await load(); render();
+    } catch (e) {
+      if (e.code === "AUTH") { location.href = "login.html?next=events.html"; return; }
+      Z.show(msg, "err", e.message);
+      btn.disabled = false; btn.textContent = "Register";
+    }
+  }
+  try { await load(); chipsRender(); render(); }
+  catch (e) { grid.innerHTML = ""; Z.show(msg, "err", e.message); }
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in | ZENORA 26</title>
+<meta name="description" content="ZENORA 26, the intercollegiate zoology department festival at Loyola College, Chennai. Where every species has a place.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/zenora.css">
+</head>
+<body>
+<div id="site-header"></div>
+<main id="main">
+
+<section class="section wrap narrow">
+  <h1 class="page-title">Log in</h1>
+  <p class="page-sub">Participants and Cultural Secretaries log in here.</p>
+  <div id="msg" class="hidden" role="alert"></div>
+  <form class="form" id="form">
+    <div class="field"><label for="email">Email</label><input id="email" type="email" autocomplete="email" required></div>
+    <div class="field"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required></div>
+    <div><button class="btn btn-forest btn-lg" type="submit" id="submit">Log in</button></div>
+    <p><a href="#" id="forgot">Forgot your password?</a> &nbsp;|&nbsp; <a href="register.html">Create an account</a></p>
+    <p class="hidden" id="resend-wrap"><button type="button" class="btn btn-outline btn-sm" id="resend">Send the verification link again</button></p>
+  </form>
+</section>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const msg = $("msg");
+  const next = new URLSearchParams(location.search).get("next");
+  const safeNext = next && /^[a-z0-9-]+\.html$/i.test(next) ? next : "dashboard.html";
+  if (Z.token()) location.replace(safeNext);
+
+  $("form").addEventListener("submit", async (e) => {
+    e.preventDefault(); msg.className = "hidden"; $("resend-wrap").classList.add("hidden");
+    const btn = $("submit"); btn.disabled = true; btn.textContent = "Logging in...";
+    try {
+      const r = await Z.api("login", { email: $("email").value, password: $("password").value });
+      Z.setToken(r.token); location.href = safeNext;
+    } catch (err) {
+      Z.show(msg, "err", err.message);
+      if (err.code === "UNVERIFIED") $("resend-wrap").classList.remove("hidden");
+      btn.disabled = false; btn.textContent = "Log in";
+    }
+  });
+  $("resend").onclick = async () => {
+    try { await Z.api("resendVerify", { email: $("email").value }); Z.show(msg, "ok", "If that email is waiting for verification, a new link is on its way."); }
+    catch (err) { Z.show(msg, "err", err.message); }
+  };
+  $("forgot").onclick = async (e) => {
+    e.preventDefault();
+    if (!$("email").value) return Z.show(msg, "warn", "Type your email above first, then press this link.");
+    try { await Z.api("forgot", { email: $("email").value }); Z.show(msg, "ok", "If that email is registered, a password reset link is on its way."); }
+    catch (err) { Z.show(msg, "err", err.message); }
+  };
+})();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reset password | ZENORA 26</title>
+<meta name="description" content="ZENORA 26, the intercollegiate zoology department festival at Loyola College, Chennai. Where every species has a place.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/zenora.css">
+</head>
+<body>
+<div id="site-header"></div>
+<main id="main">
+
+<section class="section wrap narrow">
+  <h1 class="page-title">Choose a new password</h1>
+  <div id="msg" class="hidden" role="alert"></div>
+  <form class="form" id="form">
+    <div class="field"><label for="p1">New password</label><input id="p1" type="password" minlength="8" autocomplete="new-password" required><small>At least 8 characters.</small></div>
+    <div class="field"><label for="p2">Confirm new password</label><input id="p2" type="password" autocomplete="new-password" required></div>
+    <div><button class="btn btn-forest btn-lg" type="submit">Save password</button></div>
+  </form>
+</section>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+
+(function () {
+  const msg = document.getElementById("msg");
+  const t = new URLSearchParams(location.search).get("t");
+  document.getElementById("form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const p1 = document.getElementById("p1").value;
+    if (p1 !== document.getElementById("p2").value) return Z.show(msg, "err", "The two passwords do not match.");
+    try {
+      await Z.api("reset", { token: t, password: p1 });
+      Z.show(msg, "ok", "Password changed. Taking you to log in...");
+      setTimeout(() => (location.href = "login.html"), 1500);
+    } catch (err) { Z.show(msg, "err", err.message); }
+  });
+})();
+
+</script>
+</body>
+</html>

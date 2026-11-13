@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verify email | ZENORA 26</title>
+<meta name="description" content="ZENORA 26, the intercollegiate zoology department festival at Loyola College, Chennai. Where every species has a place.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/zenora.css">
+</head>
+<body>
+<div id="site-header"></div>
+<main id="main">
+
+<section class="section wrap narrow">
+  <h1 class="page-title">Verifying your email</h1>
+  <div id="msg" class="alert alert-ok" role="status">Please wait a moment...</div>
+  <p id="again" class="hidden"><a class="btn btn-outline" href="login.html">Go to log in</a></p>
+</section>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+
+(async function () {
+  const msg = document.getElementById("msg");
+  const t = new URLSearchParams(location.search).get("t");
+  if (!t) { Z.show(msg, "err", "This link is incomplete. Please use the link from your email."); return; }
+  try {
+    const r = await Z.api("verify", { token: t });
+    Z.setToken(r.token);
+    Z.show(msg, "ok", "Email verified. Your participant ID is " + r.user.user_id + ". Taking you to your dashboard...");
+    setTimeout(() => (location.href = "dashboard.html"), 1800);
+  } catch (e) {
+    Z.show(msg, "err", e.message);
+    document.getElementById("again").classList.remove("hidden");
+  }
+})();
+
+</script>
+</body>
+</html>

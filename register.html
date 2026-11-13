@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create your account | ZENORA 26</title>
+<meta name="description" content="ZENORA 26, the intercollegiate zoology department festival at Loyola College, Chennai. Where every species has a place.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;0,9..144,800;1,9..144,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/zenora.css">
+</head>
+<body>
+<div id="site-header"></div>
+<main id="main">
+
+<section class="section wrap narrow">
+  <h1 class="page-title">Create your account</h1>
+  <p class="page-sub">One account per participant. You will register for events after verifying your email.</p>
+  <div id="msg" class="hidden" role="alert"></div>
+  <div id="done" class="card hidden">
+    <h2 class="h2" style="font-size:1.8rem">Check your email</h2>
+    <p>We sent a verification link to <strong id="done-email"></strong>. Open it to get your participant ID and QR pass. The email can take a few minutes to arrive, so please also look in spam.</p>
+    <p style="margin-top:12px"><button class="btn btn-outline btn-sm" id="resend">Send the link again</button></p>
+  </div>
+  <form class="form" id="form" novalidate>
+    <div class="hp" aria-hidden="true"><label>Leave empty <input name="hp" tabindex="-1" autocomplete="off"></label></div>
+    <fieldset><legend>About you</legend>
+      <div class="field"><label for="name">Full name</label><input id="name" name="name" autocomplete="name" required></div>
+      <div class="row">
+        <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email" required></div>
+        <div class="field"><label for="phone">Mobile number</label><input id="phone" name="phone" inputmode="numeric" autocomplete="tel" placeholder="10 digits" required></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required><small>At least 8 characters.</small></div>
+        <div class="field"><label for="password2">Confirm password</label><input id="password2" type="password" autocomplete="new-password" required></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="gender">Gender</label><select id="gender" name="gender" required><option value="">Choose</option><option>Male</option><option>Female</option><option>Other</option><option>Prefer not to say</option></select></div>
+        <div class="field"><label for="roll_no">Department roll number</label><input id="roll_no" name="roll_no"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="level">Level</label><select id="level" name="level" required><option value="">Choose</option><option value="UG">UG</option><option value="PG">PG</option><option value="Research">Research scholar</option></select></div>
+        <div class="field" id="year-wrap"><label for="year">Year of study</label><select id="year" name="year"><option value="">Choose level first</option></select></div>
+      </div>
+    </fieldset>
+
+    <fieldset><legend>Your college</legend>
+      <div class="field"><label for="college">College name</label>
+        <input id="college" name="college" list="college-list" autocomplete="off" placeholder="Start typing to search" required>
+        <datalist id="college-list"></datalist>
+        <small>Zoology department students only. Pick your college from the list.</small></div>
+      <div id="new-college" class="hidden">
+        <div class="alert alert-warn">We could not find this college in our list. Please add its details; we will verify them. You can continue registering meanwhile.</div>
+        <div class="field"><label for="nc_website">College website</label><input id="nc_website" type="url" placeholder="https://"></div>
+        <div class="field"><label for="nc_email">Official college email</label><input id="nc_email" type="email" placeholder="info@, helpdesk@, enquiry@ or principal@"></div>
+        <div class="field"><label for="nc_address">College address</label><textarea id="nc_address" rows="2"></textarea></div>
+        <div class="field"><label for="nc_status">College status</label><select id="nc_status"><option value="">Choose</option><option>Autonomous</option><option>University</option><option>Non-autonomous</option></select></div>
+      </div>
+      <div class="field"><label for="id_image">Photo of your college ID card</label><input id="id_image" type="file" accept="image/*" required><small>A clear photo of the front. It is resized automatically and stored privately.</small></div>
+    </fieldset>
+
+    <fieldset><legend>A few more details</legend>
+      <div class="row">
+        <div class="field"><label for="emergency_contact">Emergency contact number</label><input id="emergency_contact" name="emergency_contact" inputmode="numeric"></div>
+        <div class="field"><label for="food">Food preference</label><select id="food" name="food"><option value="">Choose</option><option>Vegetarian</option><option>Non-vegetarian</option></select></div>
+      </div>
+      <div class="field"><label for="accommodation">Do you need accommodation?</label><select id="accommodation" name="accommodation"><option value="">Choose</option><option>No</option><option>Yes</option></select></div>
+      <div class="field"><label class="check"><input type="checkbox" id="wants_secretary"> I am my college's Cultural Secretary (needs approval from the organisers)</label>
+        <small>Cultural Secretaries can see which events their college's students registered for and finalize the list.</small></div>
+    </fieldset>
+    <div><button class="btn btn-forest btn-lg" type="submit" id="submit">Create account</button>
+      <p style="margin-top:12px">Already registered? <a href="login.html">Log in</a></p></div>
+  </form>
+</section>
+
+</main>
+<div id="site-footer"></div>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/layout.js"></script>
+<script>
+
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const msg = $("msg"), form = $("form");
+  const YEARS = { UG: [1, 2, 3], PG: [1, 2], Research: [] };
+  let colleges = [];
+
+  $("level").addEventListener("change", () => {
+    const l = $("level").value, ys = YEARS[l] || [];
+    $("year-wrap").classList.toggle("hidden", l === "Research");
+    $("year").innerHTML = ys.length ? '<option value="">Choose</option>' + ys.map((y) => `<option value="${y}">Year ${y}</option>`).join("") : '<option value="">Choose level first</option>';
+  });
+
+  try {
+    colleges = await Z.api("colleges");
+    $("college-list").innerHTML = colleges.map((c) => `<option value="${Z.esc(c.name)}"></option>`).join("");
+  } catch (e) { Z.show(msg, "err", e.message); }
+
+  const match = () => colleges.find((c) => c.name.toLowerCase() === $("college").value.trim().toLowerCase());
+  $("college").addEventListener("input", () => {
+    const v = $("college").value.trim();
+    $("new-college").classList.toggle("hidden", !v || !!match());
+  });
+
+  async function compress(file) {
+    const bmp = await createImageBitmap(file);
+    const sc = Math.min(1, 1200 / Math.max(bmp.width, bmp.height));
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(bmp.width * sc); cv.height = Math.round(bmp.height * sc);
+    cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+    let q = 0.8, data = cv.toDataURL("image/jpeg", q);
+    while (data.length > 400000 && q > 0.4) { q -= 0.1; data = cv.toDataURL("image/jpeg", q); }
+    return data;
+  }
+
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    msg.className = "hidden";
+    if ($("password").value !== $("password2").value) return Z.show(msg, "err", "The two passwords do not match.");
+    const file = $("id_image").files[0];
+    if (!file) return Z.show(msg, "err", "Please upload a photo of your college ID card.");
+    const typed = $("college").value.trim(), known = match();
+    if (!typed) return Z.show(msg, "err", "Please enter your college name.");
+
+    const data = {
+      hp: form.hp.value, name: $("name").value, email: $("email").value, phone: $("phone").value,
+      password: $("password").value, gender: $("gender").value, level: $("level").value, year: $("year").value,
+      roll_no: $("roll_no").value, emergency_contact: $("emergency_contact").value,
+      food: $("food").value, accommodation: $("accommodation").value, wants_secretary: $("wants_secretary").checked
+    };
+    if (known) data.college_code = known.code;
+    else data.new_college = { name: typed, website: $("nc_website").value, email: $("nc_email").value, address: $("nc_address").value, status: $("nc_status").value };
+
+    const btn = $("submit"); btn.disabled = true; btn.textContent = "Creating your account...";
+    try {
+      data.id_image = await compress(file);
+      await Z.api("register", data);
+      form.classList.add("hidden"); $("done-email").textContent = data.email; $("done").classList.remove("hidden");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      $("resend").onclick = async () => { try { await Z.api("resendVerify", { email: data.email }); $("resend").textContent = "Sent again"; } catch (e) { Z.show(msg, "err", e.message); } };
+    } catch (e) {
+      Z.show(msg, "err", e.message);
+      btn.disabled = false; btn.textContent = "Create account";
+    }
+  });
+})();
+
+</script>
+</body>
+</html>
