@@ -1,9 +1,13 @@
 /* ZENORA 26 | api.js : talks to the Apps Script backend. */
 (function () {
   const TOKEN_KEY = "zenora_token";
+  const STAFF_KEY = "zenora_staff_token";
   const Z = {
     token: () => localStorage.getItem(TOKEN_KEY) || "",
     setToken: (t) => localStorage.setItem(TOKEN_KEY, t),
+    staffToken: () => localStorage.getItem(STAFF_KEY) || "",
+    setStaffToken: (t) => localStorage.setItem(STAFF_KEY, t),
+    clearStaffToken: () => localStorage.removeItem(STAFF_KEY),
     logout() { localStorage.removeItem(TOKEN_KEY); location.href = "index.html"; },
 
     async api(action, data = {}, withToken = false) {
@@ -15,7 +19,7 @@
         res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action, data, token: withToken ? Z.token() : "" })
+          body: JSON.stringify({ action, data, token: withToken === "staff" ? Z.staffToken() : (withToken ? Z.token() : "") })
         });
       } catch (e) {
         throw new Error("Cannot reach the server. Please check your internet connection and try again.");
@@ -25,7 +29,7 @@
       if (!json.ok) {
         const err = new Error(json.error || "Something went wrong.");
         err.code = json.code || "";
-        if (err.code === "AUTH") localStorage.removeItem(TOKEN_KEY);
+        if (err.code === "AUTH") localStorage.removeItem(withToken === "staff" ? STAFF_KEY : TOKEN_KEY);
         throw err;
       }
       return json.data;

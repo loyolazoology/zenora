@@ -33,7 +33,7 @@
         <p class="footer-line">Where every species has a place.</p>
         <p class="footer-small">Organised by the PG &amp; Research Department of Advanced Zoology and Biotechnology with the Zoologist Association of Loyola College, Loyola College (Autonomous), Sterling Road, Nungambakkam, Chennai 600 034.</p>
       </div>
-      <nav class="footer-links" aria-label="Footer">${links()}<a href="https://www.loyolacollege.edu" target="_blank" rel="noopener noreferrer">Loyola College</a></nav>
+      <nav class="footer-links" aria-label="Footer">${links()}<a href="https://www.loyolacollege.edu" target="_blank" rel="noopener noreferrer">Loyola College</a><a href="admin.html">Staff login</a></nav>
     </div>
     <div class="wrap footer-credit">Designed and developed by the Media and Digital Innovation Team, AZ-BT, Loyola College.</div>
   </footer>`;

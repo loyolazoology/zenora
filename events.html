@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Events | ZENORA 26</title>
+<title>My dashboard | ZENORA 26</title>
 <meta name="description" content="ZENORA 26, the intercollegiate zoology department festival at Loyola College, Chennai. Where every species has a place.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,15 +15,41 @@
 <main id="main">
 
 <section class="section wrap">
-  <h1 class="page-title">Events</h1>
-  <p class="page-sub">Online, onstage and offstage competitions for Zoology departments. Log in to register. For team events, the team leader creates a team and shares the team code; teammates from the same college join with it.</p>
-  <div id="msg" class="hidden" role="status"></div>
-  <form class="card hidden" id="joinbox" style="margin-bottom:24px;display:flex;gap:12px;align-items:end;flex-wrap:wrap">
-    <div class="field" style="margin:0;flex:1;min-width:220px"><label for="code">Have a team code from your team leader?</label><input id="code" maxlength="8" autocomplete="off" placeholder="e.g. K7M2QX" style="text-transform:uppercase"></div>
-    <button class="btn btn-forest" type="submit">Join team</button>
-  </form>
-  <div class="chips" id="chips" role="group" aria-label="Filter by mode"></div>
-  <div class="event-grid" id="grid"><p>Loading events...</p></div>
+  <h1 class="page-title">My dashboard</h1>
+  <div id="msg" class="hidden" role="alert"></div>
+  <div id="notes"></div>
+  <div class="dash-grid">
+    <aside class="card pass" aria-label="Your pass">
+      <p>Participant ID</p>
+      <p class="id" id="uid">...</p>
+      <div id="qr" aria-label="Your QR pass"></div>
+      <p id="who" style="font-weight:600"></p>
+      <p id="college" style="color:var(--muted)"></p>
+      <p style="margin-top:10px;font-size:.9rem;color:var(--muted)">Show this QR to the volunteer for entry and at each event. Do not share a screenshot.</p>
+    </aside>
+    <div style="display:grid;gap:24px">
+      <div class="card">
+        <h2 class="h2" style="font-size:1.6rem;margin-bottom:12px">My events</h2>
+        <div class="table-wrap"><table id="regs"><thead><tr><th>Event</th><th>When</th><th>Where</th><th></th></tr></thead><tbody><tr><td colspan="4">Loading...</td></tr></tbody></table></div>
+        <p style="margin-top:14px"><a class="btn btn-forest btn-sm" href="events.html">Browse events</a> <a class="btn btn-outline btn-sm hidden" id="sec-link" href="secretary.html">Cultural Secretary page</a></p>
+      </div>
+      <div class="card">
+        <h2 class="h2" style="font-size:1.6rem;margin-bottom:12px">My details</h2>
+        <form class="form" id="pform">
+          <div class="row">
+            <div class="field"><label for="p-name">Name</label><input id="p-name"></div>
+            <div class="field"><label for="p-phone">Mobile number</label><input id="p-phone" inputmode="numeric"></div>
+          </div>
+          <div class="row">
+            <div class="field"><label for="p-emergency">Emergency contact</label><input id="p-emergency" inputmode="numeric"></div>
+            <div class="field"><label for="p-food">Food preference</label><select id="p-food"><option value="">Choose</option><option>Vegetarian</option><option>Non-vegetarian</option></select></div>
+          </div>
+          <div><button class="btn btn-outline btn-sm" type="submit">Save details</button></div>
+        </form>
+        <p style="margin-top:10px;color:var(--muted);font-size:.9rem">To change your email, college or ID card, please contact the organisers.</p>
+      </div>
+    </div>
+  </div>
 </section>
 
 </main>
@@ -31,98 +57,61 @@
 <script src="assets/js/config.js"></script>
 <script src="assets/js/api.js"></script>
 <script src="assets/js/layout.js"></script>
-<script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script><script>
 
 (async function () {
-  const grid = document.getElementById("grid"), msg = document.getElementById("msg"), chips = document.getElementById("chips");
-  let events = [], filter = "All";
-  const loggedIn = !!Z.token();
+  if (!Z.requireLogin()) return;
+  const $ = (id) => document.getElementById(id), msg = $("msg");
+  let me;
+  function paint() {
+    $("uid").textContent = me.user_id; $("who").textContent = me.name;
+    $("college").textContent = [me.college_name, me.level + (me.year ? " year " + me.year : "")].filter(Boolean).join(", ");
+    $("qr").innerHTML = "";
+    new QRCode($("qr"), { text: me.qr, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+    let notes = "";
+    if (me.secretary_status === "pending") notes += '<div class="alert alert-warn">Your Cultural Secretary request is waiting for approval from the organisers.</div>';
+    if (me.secretary_status === "approved") notes += '<div class="alert alert-ok">You are an approved Cultural Secretary for ' + Z.esc(me.college_name) + '.</div>';
+    if (!me.college_verified) notes += '<div class="alert alert-warn">Your college is waiting for verification by the organisers. You can continue to register for events.</div>';
+    $("notes").innerHTML = notes;
+    $("sec-link").classList.toggle("hidden", me.secretary_status !== "approved");
+    $("p-name").value = me.name; $("p-phone").value = me.phone; $("p-emergency").value = me.emergency_contact; $("p-food").value = me.food;
+  }
+  async function regs() {
+    const rows = await Z.api("myRegistrations", {}, true);
+    const tb = $("regs").querySelector("tbody");
+    if (!rows.length) { tb.innerHTML = '<tr><td colspan="4">You have not registered for any event yet.</td></tr>'; return; }
+    tb.innerHTML = rows.map((r) => {
+      const cancelled = r.status !== "registered";
+      const when = [r.date ? Z.fmtDate(r.date, { day: "numeric", month: "short" }) : "", r.time].filter(Boolean).join(", ");
+      const t = r.team;
+      let teamHtml = "";
+      if (t) {
+        teamHtml = `<br><small>Team of ${t.size}${t.max_team ? " (max " + t.max_team + ")" : ""}: ${t.members.map((m) => Z.esc(m.name)).join(", ")}</small>`;
+        if (t.is_leader) teamHtml += `<br><small>Team code: <strong>${Z.esc(t.join_code)}</strong></small>`;
+        else teamHtml += `<br><small>Leader: ${Z.esc(t.leader_name)}</small>`;
+        if (t.incomplete) teamHtml += `<br><small style="color:var(--danger)">Needs at least ${t.min_team} members</small>`;
+      }
+      const cancelLabel = t ? (t.is_leader ? "Cancel team" : "Leave team") : "Cancel";
+      return `<tr><td class="${cancelled ? "status-cancelled" : ""}"><strong>${Z.esc(r.creative_title || r.name)}</strong><br><small>${Z.esc(r.mode)}${cancelled ? " (cancelled)" : ""}</small>${cancelled ? "" : teamHtml}</td>
+        <td>${Z.esc(when)}</td><td>${Z.esc(r.venue)}</td>
+        <td>${cancelled ? "" : (r.whatsapp_link ? `<a class="btn btn-outline btn-sm" href="${Z.esc(r.whatsapp_link)}" target="_blank" rel="noopener">WhatsApp</a> ` : "") + `<button class="btn btn-danger btn-sm" data-c="${Z.esc(r.reg_id)}" data-leader="${t && t.is_leader ? 1 : 0}">${cancelLabel}</button>`}</td></tr>`;
+    }).join("");
+    tb.querySelectorAll("[data-c]").forEach((b) => b.onclick = async () => {
+      if (!confirm(b.dataset.leader === "1" ? "Cancel the whole team? Every member will be removed and emailed." : "Cancel this registration?")) return;
+      try { await Z.api("cancelRegistration", { reg_id: b.dataset.c }, true); Z.show(msg, "ok", "Registration cancelled."); await regs(); }
+      catch (e) { Z.show(msg, "err", e.message); }
+    });
+  }
+  try { me = await Z.api("me", {}, true); paint(); await regs(); }
+  catch (e) { if (e.code === "AUTH") return location.replace("login.html?next=dashboard.html"); Z.show(msg, "err", e.message); }
 
-  async function load() {
-    try { events = await Z.api("events", {}, true); }
-    catch (e) { events = await Z.api("events", {}, false); }
-  }
-  function chipsRender() {
-    const modes = ["All", ...new Set(events.map((e) => e.mode).filter(Boolean))];
-    chips.innerHTML = modes.map((m) => `<button class="chip" aria-pressed="${m === filter}" data-m="${Z.esc(m)}">${Z.esc(m)}</button>`).join("");
-    chips.querySelectorAll("button").forEach((b) => b.onclick = () => { filter = b.dataset.m; chipsRender(); render(); });
-  }
-  function card(e) {
-    const team = String(e.type).toLowerCase() === "team";
-    const title = e.creative_title || e.name;
-    const alt = e.creative_title && e.name !== e.creative_title ? e.name : "";
-    const when = [e.date ? Z.fmtDate(e.date) : "", e.time].filter(Boolean).join(", ");
-    let slots = "";
-    if (e.max_per_college) {
-      const unit = team ? "teams" : "slots";
-      slots = loggedIn && e.college_taken !== undefined
-        ? `Your college: ${e.college_taken} of ${e.max_per_college} ${unit} used`
-        : `Up to ${e.max_per_college} ${team ? "teams" : "entries"} per college`;
-    }
-    let action;
-    if (!loggedIn) action = `<a class="btn btn-forest btn-sm" href="login.html?next=events.html">Log in to register</a>`;
-    else if (e.registered) action = `<span class="tag">Registered</span>`;
-    else if (team) action = `<button class="btn btn-forest btn-sm" data-team="${Z.esc(e.event_id)}">Create a team</button>`;
-    else action = `<button class="btn btn-forest btn-sm" data-reg="${Z.esc(e.event_id)}">Register</button>`;
-    return `<article class="event">
-      <div class="tags"><span class="tag ${e.mode === "Online" ? "tag-online" : ""}">${Z.esc(e.mode)}</span>
-        <span class="tag">${team ? "Team of " + Z.esc(e.min_team || "?") + " to " + Z.esc(e.max_team || "?") : "Individual"}</span></div>
-      <h3>${Z.esc(title)}</h3>${alt ? `<p class="alt">${Z.esc(alt)}</p>` : ""}
-      <div class="meta">${when ? `<span>${Z.esc(when)}</span>` : ""}${e.venue ? `<span>${Z.esc(e.venue)}</span>` : ""}${slots ? `<span>${Z.esc(slots)}</span>` : ""}</div>
-      ${e.description ? `<p>${Z.esc(e.description)}</p>` : ""}
-      ${e.rules ? `<details><summary>Rules</summary><p>${Z.esc(e.rules)}</p></details>` : ""}
-      <div class="actions">${action}</div></article>`;
-  }
-  function render() {
-    const list = events.filter((e) => filter === "All" || e.mode === filter);
-    grid.innerHTML = list.length ? list.map(card).join("") : "<p>No events to show yet. Please check back soon.</p>";
-    grid.querySelectorAll("[data-reg]").forEach((b) => b.onclick = () => register(b));
-    grid.querySelectorAll("[data-team]").forEach((b) => b.onclick = () => createTeam(b));
-    document.getElementById("joinbox").classList.toggle("hidden", !loggedIn || !events.some((e) => String(e.type).toLowerCase() === "team"));
-  }
-  function extras(r) {
-    if (r.whatsapp_link) {
-      const a = document.createElement("a");
-      a.href = r.whatsapp_link; a.target = "_blank"; a.rel = "noopener"; a.className = "btn btn-forest btn-sm";
-      a.style.marginLeft = "12px"; a.textContent = "Join the WhatsApp group";
-      msg.appendChild(a);
-    }
-  }
-  async function createTeam(btn) {
-    btn.disabled = true; btn.textContent = "Creating...";
-    try {
-      const r = await Z.api("teamCreate", { event_id: btn.dataset.team }, true);
-      Z.show(msg, r.warnings && r.warnings.length ? "warn" : "ok", "Team created. Your team code is " + r.join_code + ". Share it only with teammates from your college (they join from this page). Team size: " + r.min_team + " to " + r.max_team + ". " + (r.warnings || []).join(" "));
-      extras(r); await load(); render();
-    } catch (e) {
-      if (e.code === "AUTH") { location.href = "login.html?next=events.html"; return; }
-      Z.show(msg, "err", e.message); btn.disabled = false; btn.textContent = "Create a team";
-    }
-  }
-  document.getElementById("joinbox").addEventListener("submit", async (ev) => {
+  $("pform").addEventListener("submit", async (ev) => {
     ev.preventDefault();
     try {
-      const r = await Z.api("teamJoin", { code: document.getElementById("code").value }, true);
-      Z.show(msg, r.warnings && r.warnings.length ? "warn" : "ok", "You joined the team for " + r.event_name + ". " + (r.warnings || []).join(" "));
-      extras(r); document.getElementById("code").value = ""; await load(); render();
+      me = await Z.api("updateProfile", { name: $("p-name").value, phone: $("p-phone").value, emergency_contact: $("p-emergency").value, food: $("p-food").value }, true);
+      paint(); Z.show(msg, "ok", "Details saved.");
     } catch (e) { Z.show(msg, "err", e.message); }
   });
-  async function register(btn) {
-    btn.disabled = true; btn.textContent = "Registering...";
-    try {
-      const r = await Z.api("registerEvent", { event_id: btn.dataset.reg }, true);
-      let text = "You are registered. A confirmation email is on its way.";
-      Z.show(msg, r.warnings && r.warnings.length ? "warn" : "ok", text + (r.warnings && r.warnings.length ? " " + r.warnings.join(" ") : ""));
-      extras(r);
-      await load(); render();
-    } catch (e) {
-      if (e.code === "AUTH") { location.href = "login.html?next=events.html"; return; }
-      Z.show(msg, "err", e.message);
-      btn.disabled = false; btn.textContent = "Register";
-    }
-  }
-  try { await load(); chipsRender(); render(); }
-  catch (e) { grid.innerHTML = ""; Z.show(msg, "err", e.message); }
 })();
 
 </script>
